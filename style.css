@@ -12,7 +12,7 @@ body {
   background-color: red;
 }
 
-.glslCanvas {
+#glslCanvas {
   box-sizing: border-box;
   display: block;
   width: 100%;
