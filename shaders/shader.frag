@@ -48,6 +48,6 @@ void main() {
     uv = (uv - 0.5) / scl + 0.5;
 
     vec4 water = texture(u_tex, uv);
-    color = water * 0.5;
+    color = water * 1.0;
     fragColor = color;
 }

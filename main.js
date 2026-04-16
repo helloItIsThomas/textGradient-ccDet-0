@@ -5,6 +5,7 @@
 // Available keys per pass:
 //   frag  (required) — path to the fragment shader file
 //   vert  (optional) — path to a vertex shader file (default: fullscreen quad)
+//   scale (optional) — FBO resolution multiplier (e.g. 0.5 = half res, default: 1)
 //
 // Inside any fragment shader you get these uniforms for free:
 //   uniform float     u_time;
@@ -14,10 +15,26 @@
 // You can also call pipeline.setUniform(name, value) at runtime to push
 // custom uniforms (float, vec2/3/4, sampler2D from image URL).
 
-const passes = [
-  { frag: "shaders/shader.frag" },
-  { frag: "shaders/testShader.frag" },
-];
+// Helper: generates a dual-Kawase blur chain (down then up).
+//   iterations — number of downsamples (and upsamples). More = wider blur.
+function dualBlur(iterations = 4) {
+  const passes = [];
+  for (let i = 1; i <= iterations; i++) {
+    passes.push({
+      frag: "shaders/dualBlurDown.frag",
+      scale: 1 / Math.pow(2, i),
+    });
+  }
+  for (let i = iterations - 1; i >= 0; i--) {
+    passes.push({
+      frag: "shaders/dualBlurUp.frag",
+      scale: i === 0 ? 1 : 1 / Math.pow(2, i),
+    });
+  }
+  return passes;
+}
+
+const passes = [{ frag: "shaders/shader.frag" }, ...dualBlur(4)];
 
 // ── Custom uniforms ─────────────────────────────────────────────────
 // Called once the pipeline is ready. Set any extra uniforms here.
@@ -200,17 +217,21 @@ class Pipeline {
       c.width = w;
       c.height = h;
       for (const p of this._passes) {
-        if (p.fbo) resizeFBO(gl, p.fbo, w, h);
+        if (p.fbo) {
+          const sw = Math.max(1, Math.round(w * p.scale));
+          const sh = Math.max(1, Math.round(h * p.scale));
+          resizeFBO(gl, p.fbo, sw, sh);
+        }
       }
     }
   }
 
-  _bindBuiltins(program, time) {
+  _bindBuiltins(program, time, passWidth, passHeight) {
     const gl = this._gl;
     const tLoc = gl.getUniformLocation(program, "u_time");
     if (tLoc) gl.uniform1f(tLoc, time);
     const rLoc = gl.getUniformLocation(program, "u_resolution");
-    if (rLoc) gl.uniform2f(rLoc, this._canvas.width, this._canvas.height);
+    if (rLoc) gl.uniform2f(rLoc, passWidth, passHeight);
   }
 
   _bindCustomUniforms(program) {
@@ -244,6 +265,21 @@ class Pipeline {
     }
   }
 
+  _bindPerPassUniforms(program, uniforms) {
+    const gl = this._gl;
+    for (const [name, value] of Object.entries(uniforms)) {
+      const loc = gl.getUniformLocation(program, name);
+      if (!loc) continue;
+      if (Array.isArray(value)) {
+        if (value.length === 2) gl.uniform2fv(loc, value);
+        else if (value.length === 3) gl.uniform3fv(loc, value);
+        else if (value.length === 4) gl.uniform4fv(loc, value);
+      } else {
+        gl.uniform1f(loc, value);
+      }
+    }
+  }
+
   _bindPassTextures(program, passIndex) {
     const gl = this._gl;
     for (let i = 0; i < passIndex; i++) {
@@ -253,6 +289,16 @@ class Pipeline {
       gl.activeTexture(gl.TEXTURE0 + unit);
       gl.bindTexture(gl.TEXTURE_2D, this._passes[i].fbo.texture);
       gl.uniform1i(loc, unit);
+    }
+    // u_input — always the immediately preceding pass's output
+    if (passIndex > 0) {
+      const loc = gl.getUniformLocation(program, "u_input");
+      if (loc) {
+        const unit = this._nextTexUnit++;
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(gl.TEXTURE_2D, this._passes[passIndex - 1].fbo.texture);
+        gl.uniform1i(loc, unit);
+      }
     }
   }
 
@@ -268,16 +314,22 @@ class Pipeline {
       this._nextTexUnit = 0;
       gl.useProgram(pass.program);
 
-      // bind target
+      // bind target — use pass FBO dimensions or canvas for final pass
+      let passW, passH;
       if (isLast) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        passW = this._canvas.width;
+        passH = this._canvas.height;
       } else {
         gl.bindFramebuffer(gl.FRAMEBUFFER, pass.fbo.fbo);
+        passW = pass.fbo.width;
+        passH = pass.fbo.height;
       }
-      gl.viewport(0, 0, this._canvas.width, this._canvas.height);
+      gl.viewport(0, 0, passW, passH);
 
-      this._bindBuiltins(pass.program, time);
+      this._bindBuiltins(pass.program, time, passW, passH);
       this._bindCustomUniforms(pass.program);
+      this._bindPerPassUniforms(pass.program, pass.uniforms);
       this._bindPassTextures(pass.program, i);
 
       gl.bindVertexArray(this._quadVAO);
@@ -323,10 +375,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const vertSrc = cfg.vert ? await fetchShader(cfg.vert) : DEFAULT_VERT;
     const program = createProgram(gl, vertSrc, fragSrc);
     const isLast = i === passes.length - 1;
-    const fbo = isLast
-      ? null
-      : createFBO(gl, canvas.width || 1, canvas.height || 1);
-    compiledPasses.push({ program, fbo });
+    const scale = cfg.scale || 1;
+    const fboW = Math.max(1, Math.round((canvas.width || 1) * scale));
+    const fboH = Math.max(1, Math.round((canvas.height || 1) * scale));
+    const fbo = isLast ? null : createFBO(gl, fboW, fboH);
+    compiledPasses.push({ program, fbo, scale, uniforms: cfg.uniforms || {} });
   }
 
   const pipeline = new Pipeline(canvas, gl, compiledPasses, vao);
