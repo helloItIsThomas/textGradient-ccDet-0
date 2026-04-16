@@ -16,13 +16,14 @@
 
 const passes = [
   { frag: "shaders/shader.frag" },
+  { frag: "shaders/testShader.frag" },
 ];
 
 // ── Custom uniforms ─────────────────────────────────────────────────
 // Called once the pipeline is ready. Set any extra uniforms here.
 function onReady(pipeline) {
   pipeline.setUniform("u_brightness", 0.15);
-  pipeline.setUniform("u_tex", "/assets/iceland-ice-2.JPG");
+  pipeline.setUniform("u_tex", "/assets/helloWorld.png");
   pipeline.setUniform("u_texResW", 2198.0);
   pipeline.setUniform("u_texResH", 1537.0);
   pipeline.setUniform("u_texRes", [2198.0, 1537.0]);
@@ -59,7 +60,11 @@ function loadTexture(gl, url) {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      resolve({ texture: tex, width: img.naturalWidth, height: img.naturalHeight });
+      resolve({
+        texture: tex,
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      });
     };
     img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
     img.src = url;
@@ -97,7 +102,17 @@ function createProgram(gl, vertSrc, fragSrc) {
 function createFBO(gl, width, height) {
   const tex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA,
+    width,
+    height,
+    0,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    null,
+  );
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -105,7 +120,13 @@ function createFBO(gl, width, height) {
 
   const fbo = gl.createFramebuffer();
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  gl.framebufferTexture2D(
+    gl.FRAMEBUFFER,
+    gl.COLOR_ATTACHMENT0,
+    gl.TEXTURE_2D,
+    tex,
+    0,
+  );
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
   return { fbo, texture: tex, width, height };
@@ -115,7 +136,17 @@ function resizeFBO(gl, fboObj, width, height) {
   fboObj.width = width;
   fboObj.height = height;
   gl.bindTexture(gl.TEXTURE_2D, fboObj.texture);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texImage2D(
+    gl.TEXTURE_2D,
+    0,
+    gl.RGBA,
+    width,
+    height,
+    0,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    null,
+  );
 }
 
 // ── Pipeline ─────────────────────────────────────────────────────────
@@ -143,7 +174,12 @@ class Pipeline {
       // treat as image URL — load async, store when ready
       this._uniforms[name] = { type: "sampler2D", value: null, loading: true };
       loadTexture(this._gl, value).then((res) => {
-        this._uniforms[name] = { type: "sampler2D", value: res.texture, width: res.width, height: res.height };
+        this._uniforms[name] = {
+          type: "sampler2D",
+          value: res.texture,
+          width: res.width,
+          height: res.height,
+        };
         this._textureCache[value] = res;
       });
     } else if (Array.isArray(value)) {
@@ -268,8 +304,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Fullscreen quad geometry
   const quadVerts = new Float32Array([
-    -1, -1,  1, -1,  -1, 1,
-    -1,  1,  1, -1,   1, 1,
+    -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1,
   ]);
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
@@ -288,7 +323,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const vertSrc = cfg.vert ? await fetchShader(cfg.vert) : DEFAULT_VERT;
     const program = createProgram(gl, vertSrc, fragSrc);
     const isLast = i === passes.length - 1;
-    const fbo = isLast ? null : createFBO(gl, canvas.width || 1, canvas.height || 1);
+    const fbo = isLast
+      ? null
+      : createFBO(gl, canvas.width || 1, canvas.height || 1);
     compiledPasses.push({ program, fbo });
   }
 

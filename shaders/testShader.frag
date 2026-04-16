@@ -6,6 +6,7 @@ uniform float u_time;
 uniform float u_brightness;
 uniform vec2 u_resolution;
 uniform sampler2D u_tex;
+uniform sampler2D u_pass0;
 uniform vec2 u_texRes;
 uniform float u_texResW;
 uniform float u_texResH;
@@ -48,6 +49,8 @@ void main() {
     uv = (uv - 0.5) / scl + 0.5;
 
     vec4 water = texture(u_tex, uv);
-    color = water * 0.5;
+    color = water;
+
+    color = texture(u_pass0, uv);
     fragColor = color;
 }
