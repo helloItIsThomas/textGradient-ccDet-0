@@ -37,7 +37,9 @@ function dualBlur(iterations = 4) {
 const passes = [
   { frag: "shaders/shader.frag" },
   { frag: "shaders/waterDroplet.frag" },
-  ...dualBlur(4)
+  { frag: "shaders/bloomMask.frag" },
+  ...dualBlur(4),
+  { frag: "shaders/bloomComposite.frag" },
 ];
 
 // ── Custom uniforms ─────────────────────────────────────────────────
@@ -50,10 +52,14 @@ function onReady(pipeline) {
   pipeline.setUniform("u_texRes", [2198.0, 1537.0]);
 
   // Water droplet effect uniforms
-  pipeline.setUniform("u_intensity", 0.25);
-  pipeline.setUniform("u_speed", 1.0);
-  pipeline.setUniform("u_dropletCount", 3.0);
-  pipeline.setUniform("u_lut", "/assets/liquidMetalLUT.png");
+  pipeline.setUniform("u_intensity", 1.4);
+  pipeline.setUniform("u_speed", 0.3);
+  pipeline.setUniform("u_dropletCount", 10.0);
+  pipeline.setUniform("u_lut", "/assets/icelandiceLUT.png");
+  pipeline.setUniform("u_noiseScale", 1.0);
+
+  // Bloom effect uniforms
+  pipeline.setUniform("u_bloomStrength", 0.8);
 }
 
 // ─────────────────────────────────────────────────────────────────────
