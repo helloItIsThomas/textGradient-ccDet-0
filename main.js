@@ -34,7 +34,11 @@ function dualBlur(iterations = 4) {
   return passes;
 }
 
-const passes = [{ frag: "shaders/shader.frag" }, ...dualBlur(4)];
+const passes = [
+  { frag: "shaders/shader.frag" },
+  { frag: "shaders/waterDroplet.frag" },
+  ...dualBlur(4)
+];
 
 // ── Custom uniforms ─────────────────────────────────────────────────
 // Called once the pipeline is ready. Set any extra uniforms here.
@@ -44,6 +48,12 @@ function onReady(pipeline) {
   pipeline.setUniform("u_texResW", 2198.0);
   pipeline.setUniform("u_texResH", 1537.0);
   pipeline.setUniform("u_texRes", [2198.0, 1537.0]);
+
+  // Water droplet effect uniforms
+  pipeline.setUniform("u_intensity", 0.25);
+  pipeline.setUniform("u_speed", 1.0);
+  pipeline.setUniform("u_dropletCount", 3.0);
+  pipeline.setUniform("u_lut", "/assets/liquidMetalLUT.png");
 }
 
 // ─────────────────────────────────────────────────────────────────────
