@@ -38,6 +38,7 @@ function dualBlur(iterations = 4) {
 
 const passes = [
   { frag: "shaders/shader.frag" },
+  { frag: "shaders/noise.frag" },
   { frag: "shaders/waterDroplet.frag" },
   { frag: "shaders/bloomMask.frag" },
   ...dualBlur(4),
@@ -48,9 +49,9 @@ const passes = [
 // ── Colors ──────────────────────────────────────────────────────────
 // Edit these to change the gradient and blob color everywhere at once.
 const COLORS = {
-  color0: "#E82020",  // low end of gradient
-  color1: "#A2D0CC",  // midpoint
-  color2: "#4AABE3",  // high end — also the blob color for inner shadow
+  color0: "#c0d3e3", // low end of gradient
+  color1: "#f5fcff", // midpoint
+  color2: "#d4ddd7", // high end — also the blob color for inner shadow
 };
 
 function hexToVec3(hex) {
@@ -75,11 +76,22 @@ function onReady(pipeline) {
   pipeline.setUniform("u_color1", hexToVec3(COLORS.color1));
   pipeline.setUniform("u_color2", hexToVec3(COLORS.color2));
 
-  // Water droplet effect uniforms
-  pipeline.setUniform("u_intensity", 1.4);
-  pipeline.setUniform("u_speed", 0.3);
-  pipeline.setUniform("u_dropletCount", 10.0);
-  pipeline.setUniform("u_noiseScale", 1.0);
+  // Noise pass — defaults for starting type (Wave Interference)
+  pipeline.setUniform("u_noiseType",    4.0);
+  pipeline.setUniform("u_scale",        7.9);
+  pipeline.setUniform("u_speed",        0.0);
+  pipeline.setUniform("u_octaves",      3.0);
+  pipeline.setUniform("u_lacunarity",   2.65);
+  pipeline.setUniform("u_gain",         0.8);
+  pipeline.setUniform("u_jitter",       1.0);
+  pipeline.setUniform("u_distanceMode", 0.0);
+  pipeline.setUniform("u_warpStrength", 0.45);
+  pipeline.setUniform("u_warpScale",    0.85);
+  pipeline.setUniform("u_edgeSharpness",0.0);
+  pipeline.setUniform("u_waveCount",    4.0);
+  pipeline.setUniform("u_frequency",    15.5);
+  pipeline.setUniform("u_angleSpread",  3.9);
+  pipeline.setUniform("u_curlStrength",1.0);
 
   // Bloom effect uniforms
   pipeline.setUniform("u_bloomStrength", 0.8);
@@ -427,16 +439,115 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ── GUI ────────────────────────────────────────────────────────────
   const gui = new GUI({ title: "Controls" });
 
+  // Colors
   const colorFolder = gui.addFolder("Colors");
   colorFolder.addColor(COLORS, "color0").name("Low").onChange(v => pipeline.setUniform("u_color0", hexToVec3(v)));
   colorFolder.addColor(COLORS, "color1").name("Mid").onChange(v => pipeline.setUniform("u_color1", hexToVec3(v)));
   colorFolder.addColor(COLORS, "color2").name("High / Blob").onChange(v => pipeline.setUniform("u_color2", hexToVec3(v)));
 
+  // Blob inner shadow
   const blobFolder = gui.addFolder("Blob");
   const blobParams = { sensitivity: 0.30 };
   pipeline.setUniform("u_limeThreshold", blobParams.sensitivity);
   blobFolder
     .add(blobParams, "sensitivity", 0.05, 0.8, 0.01)
     .name("Sensitivity")
-    .onChange((v) => pipeline.setUniform("u_limeThreshold", v));
+    .onChange(v => pipeline.setUniform("u_limeThreshold", v));
+
+  // ── Noise ──────────────────────────────────────────────────────────
+  const NOISE_TYPES = { "FBM": 0, "Cellular": 1, "Domain Warp": 2, "Voronoi": 3, "Wave Interference": 4, "Curl": 5 };
+
+  const NOISE_DEFS = {
+    "FBM": [
+      { key: "u_scale",      name: "Scale",      value: 3.0, min: 0.5, max: 10,  step: 0.1  },
+      { key: "u_speed",      name: "Speed",      value: 0.5, min: 0,   max: 5,   step: 0.05 },
+      { key: "u_octaves",    name: "Octaves",    value: 4,   min: 1,   max: 8,   step: 1    },
+      { key: "u_lacunarity", name: "Lacunarity", value: 2.0, min: 1.5, max: 3.0, step: 0.05 },
+      { key: "u_gain",       name: "Gain",       value: 0.5, min: 0.2, max: 0.8, step: 0.01 },
+    ],
+    "Cellular": [
+      { key: "u_scale",        name: "Scale",                   value: 4.0, min: 0.5, max: 10, step: 0.1  },
+      { key: "u_speed",        name: "Speed",                   value: 0.3, min: 0,   max: 5,  step: 0.05 },
+      { key: "u_jitter",       name: "Jitter",                  value: 0.8, min: 0,   max: 1,  step: 0.01 },
+      { key: "u_distanceMode", name: "Mode (0=F1 1=F2 2=F2-F1)",value: 0,  min: 0,   max: 2,  step: 1    },
+    ],
+    "Domain Warp": [
+      { key: "u_scale",        name: "Scale",         value: 2.5, min: 0.5, max: 10,  step: 0.1  },
+      { key: "u_speed",        name: "Speed",         value: 0.4, min: 0,   max: 5,   step: 0.05 },
+      { key: "u_octaves",      name: "Octaves",       value: 4,   min: 1,   max: 6,   step: 1    },
+      { key: "u_lacunarity",   name: "Lacunarity",    value: 2.0, min: 1.5, max: 3.0, step: 0.05 },
+      { key: "u_gain",         name: "Gain",          value: 0.5, min: 0.2, max: 0.8, step: 0.01 },
+      { key: "u_warpStrength", name: "Warp Strength", value: 1.0, min: 0,   max: 3.0, step: 0.05 },
+      { key: "u_warpScale",    name: "Warp Scale",    value: 1.0, min: 0.1, max: 5.0, step: 0.05 },
+    ],
+    "Voronoi": [
+      { key: "u_scale",         name: "Scale",          value: 5.0, min: 0.5, max: 10, step: 0.1  },
+      { key: "u_speed",         name: "Speed",          value: 0.2, min: 0,   max: 5,  step: 0.05 },
+      { key: "u_jitter",        name: "Jitter",         value: 0.9, min: 0,   max: 1,  step: 0.01 },
+      { key: "u_edgeSharpness", name: "Edge Sharpness", value: 0.5, min: 0,   max: 1,  step: 0.01 },
+    ],
+    "Wave Interference": [
+      { key: "u_scale",       name: "Scale",        value: 7.9,  min: 0.5, max: 20,           step: 0.1  },
+      { key: "u_speed",       name: "Speed",        value: 0.0,  min: 0,   max: 5,            step: 0.05 },
+      { key: "u_waveCount",   name: "Wave Count",   value: 4,    min: 1,   max: 8,            step: 1    },
+      { key: "u_frequency",   name: "Frequency",    value: 15.5, min: 1,   max: 20,           step: 0.5  },
+      { key: "u_angleSpread", name: "Angle Spread", value: 3.9,  min: 0.1, max: Math.PI * 2, step: 0.1  },
+    ],
+    "Curl": [
+      { key: "u_scale",        name: "Scale",         value: 2.0, min: 0.5, max: 10,  step: 0.1  },
+      { key: "u_speed",        name: "Speed",         value: 0.5, min: 0,   max: 5,   step: 0.05 },
+      { key: "u_octaves",      name: "Octaves",       value: 4,   min: 1,   max: 6,   step: 1    },
+      { key: "u_curlStrength", name: "Curl Strength", value: 1.0, min: 0.1, max: 4.0, step: 0.05 },
+    ],
+  };
+
+  const noiseState  = { type: "Wave Interference" };
+  const noiseValues = {};
+  let   noiseParamsFolder = null;
+  const noiseFolder = gui.addFolder("Noise");
+
+  function applyNoiseType(typeName) {
+    pipeline.setUniform("u_noiseType", NOISE_TYPES[typeName]);
+    for (const def of NOISE_DEFS[typeName]) {
+      if (!(def.key in noiseValues)) noiseValues[def.key] = def.value;
+      pipeline.setUniform(def.key, noiseValues[def.key]);
+    }
+    if (noiseParamsFolder) noiseParamsFolder.destroy();
+    noiseParamsFolder = noiseFolder.addFolder("Params");
+    for (const def of NOISE_DEFS[typeName]) {
+      noiseParamsFolder
+        .add(noiseValues, def.key, def.min, def.max, def.step)
+        .name(def.name)
+        .onChange(v => pipeline.setUniform(def.key, v));
+    }
+  }
+
+  noiseFolder
+    .add(noiseState, "type", Object.keys(NOISE_TYPES))
+    .name("Type")
+    .onChange(v => applyNoiseType(v));
+
+  applyNoiseType("Wave Interference");
+
+  async function copyGLSL() {
+    const src = await fetch("shaders/noise.frag").then(r => r.text());
+    let out = src;
+    const allKeys = [...new Set(Object.values(NOISE_DEFS).flat().map(d => d.key))];
+    for (const key of allKeys) {
+      if (key in noiseValues) {
+        out = out.replace(
+          new RegExp(`^uniform float ${key};`, "m"),
+          `const float ${key} = ${noiseValues[key].toFixed(4)};`
+        );
+      }
+    }
+    out = out.replace(
+      /^uniform float u_noiseType;/m,
+      `const float u_noiseType = ${NOISE_TYPES[noiseState.type]}.0;`
+    );
+    await navigator.clipboard.writeText(out);
+    alert("GLSL copied to clipboard.");
+  }
+
+  noiseFolder.add({ copy: copyGLSL }, "copy").name("Copy GLSL");
 });
