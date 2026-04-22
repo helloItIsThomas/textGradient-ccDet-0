@@ -1,3 +1,5 @@
+import GUI from "lil-gui";
+
 // ── Pipeline config ──────────────────────────────────────────────────
 // Each entry is one render pass. The last pass draws to screen;
 // all others render to offscreen framebuffers.
@@ -40,6 +42,7 @@ const passes = [
   { frag: "shaders/bloomMask.frag" },
   ...dualBlur(4),
   { frag: "shaders/bloomComposite.frag" },
+  { frag: "shaders/innerShadow.frag" },
 ];
 
 // ── Custom uniforms ─────────────────────────────────────────────────
@@ -55,7 +58,7 @@ function onReady(pipeline) {
   pipeline.setUniform("u_intensity", 1.4);
   pipeline.setUniform("u_speed", 0.3);
   pipeline.setUniform("u_dropletCount", 10.0);
-  pipeline.setUniform("u_lut", "/assets/icelandiceLUT.png");
+  pipeline.setUniform("u_lut", "/assets/blueTeaLUT.png");
   pipeline.setUniform("u_noiseScale", 1.0);
 
   // Bloom effect uniforms
@@ -226,9 +229,8 @@ class Pipeline {
   _resize() {
     const gl = this._gl;
     const c = this._canvas;
-    const dpr = window.devicePixelRatio || 1;
-    const w = Math.round(c.clientWidth * dpr);
-    const h = Math.round(c.clientHeight * dpr);
+    const w = 1080;
+    const h = 1350;
     if (c.width !== w || c.height !== h) {
       c.width = w;
       c.height = h;
@@ -401,4 +403,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   const pipeline = new Pipeline(canvas, gl, compiledPasses, vao);
   onReady(pipeline);
   pipeline.start();
+
+  // ── GUI ────────────────────────────────────────────────────────────
+  const gui = new GUI({ title: "Controls" });
+
+  const blobFolder = gui.addFolder("Blob");
+  const blobParams = { sensitivity: 0.30 };
+  pipeline.setUniform("u_limeThreshold", blobParams.sensitivity);
+  blobFolder.add(blobParams, "sensitivity", 0.05, 0.8, 0.01)
+    .name("Sensitivity")
+    .onChange(v => pipeline.setUniform("u_limeThreshold", v));
 });
