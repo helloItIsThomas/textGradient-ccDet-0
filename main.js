@@ -45,6 +45,22 @@ const passes = [
   { frag: "shaders/innerShadow.frag" },
 ];
 
+// ── Colors ──────────────────────────────────────────────────────────
+// Edit these to change the gradient and blob color everywhere at once.
+const COLORS = {
+  color0: "#E82020",  // low end of gradient
+  color1: "#A2D0CC",  // midpoint
+  color2: "#4AABE3",  // high end — also the blob color for inner shadow
+};
+
+function hexToVec3(hex) {
+  return [
+    parseInt(hex.slice(1, 3), 16) / 255,
+    parseInt(hex.slice(3, 5), 16) / 255,
+    parseInt(hex.slice(5, 7), 16) / 255,
+  ];
+}
+
 // ── Custom uniforms ─────────────────────────────────────────────────
 // Called once the pipeline is ready. Set any extra uniforms here.
 function onReady(pipeline) {
@@ -54,11 +70,15 @@ function onReady(pipeline) {
   pipeline.setUniform("u_texResH", 1537.0);
   pipeline.setUniform("u_texRes", [2198.0, 1537.0]);
 
+  // Gradient colors
+  pipeline.setUniform("u_color0", hexToVec3(COLORS.color0));
+  pipeline.setUniform("u_color1", hexToVec3(COLORS.color1));
+  pipeline.setUniform("u_color2", hexToVec3(COLORS.color2));
+
   // Water droplet effect uniforms
   pipeline.setUniform("u_intensity", 1.4);
   pipeline.setUniform("u_speed", 0.3);
   pipeline.setUniform("u_dropletCount", 10.0);
-  pipeline.setUniform("u_lut", "/assets/blueTeaLUT.png");
   pipeline.setUniform("u_noiseScale", 1.0);
 
   // Bloom effect uniforms
@@ -407,10 +427,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ── GUI ────────────────────────────────────────────────────────────
   const gui = new GUI({ title: "Controls" });
 
+  const colorFolder = gui.addFolder("Colors");
+  colorFolder.addColor(COLORS, "color0").name("Low").onChange(v => pipeline.setUniform("u_color0", hexToVec3(v)));
+  colorFolder.addColor(COLORS, "color1").name("Mid").onChange(v => pipeline.setUniform("u_color1", hexToVec3(v)));
+  colorFolder.addColor(COLORS, "color2").name("High / Blob").onChange(v => pipeline.setUniform("u_color2", hexToVec3(v)));
+
   const blobFolder = gui.addFolder("Blob");
   const blobParams = { sensitivity: 0.30 };
   pipeline.setUniform("u_limeThreshold", blobParams.sensitivity);
-  blobFolder.add(blobParams, "sensitivity", 0.05, 0.8, 0.01)
+  blobFolder
+    .add(blobParams, "sensitivity", 0.05, 0.8, 0.01)
     .name("Sensitivity")
-    .onChange(v => pipeline.setUniform("u_limeThreshold", v));
+    .onChange((v) => pipeline.setUniform("u_limeThreshold", v));
 });

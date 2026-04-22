@@ -4,7 +4,9 @@ precision mediump float;
 uniform float u_time;
 uniform vec2 u_resolution;
 uniform sampler2D u_input;
-uniform sampler2D u_lut;
+uniform vec3 u_color0;
+uniform vec3 u_color1;
+uniform vec3 u_color2;
 uniform float u_intensity;
 uniform float u_speed;
 uniform float u_dropletCount;
@@ -84,8 +86,10 @@ void main() {
   // Normalize wave height to 0-1 range for LUT lookup
   float lutCoord = clamp((waveHeight + 1.0) / 2.0, 0.0, 1.0);
 
-  // Sample from 1D LUT (horizontal gradient)
-  vec3 color = texture(u_lut, vec2(lutCoord, 0.5)).rgb;
+  // 3-stop gradient: color0 → color1 → color2
+  vec3 color = lutCoord < 0.5
+    ? mix(u_color0, u_color1, lutCoord * 2.0)
+    : mix(u_color1, u_color2, (lutCoord - 0.5) * 2.0);
 
   fragColor = vec4(color, 1.0);
 }

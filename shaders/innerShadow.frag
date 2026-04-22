@@ -4,14 +4,14 @@ precision mediump float;
 uniform sampler2D u_input;
 uniform vec2 u_resolution;
 uniform float u_limeThreshold;
+uniform vec3 u_color2;
 
 out vec4 fragColor;
 
-// Returns 1.0 for pixels matching the acid lime (#B4E825), fading to 0
+// Returns 1.0 for pixels matching u_color2 (the blob/high-end color), fading to 0
 float limeness(vec3 col) {
-  vec3 lime = vec3(0.706, 0.910, 0.145);
   float thresh = u_limeThreshold > 0.0 ? u_limeThreshold : 0.30;
-  return 1.0 - smoothstep(0.12, thresh, length(col - lime));
+  return 1.0 - smoothstep(0.12, thresh, length(col - u_color2));
 }
 
 void main() {
@@ -39,7 +39,7 @@ void main() {
   }
   shadow = clamp(shadow / shadowRadius, 0.0, 1.0) * 0.7;
 
-  vec3 shadowColor = vec3(0.04, 0.10, 0.03); // dark green-tinted shadow
+  vec3 shadowColor = u_color2 * 0.08; // shadow is a very dark tint of the blob color
   vec3 result = mix(src.rgb, shadowColor, shadow * isLime);
 
   fragColor = vec4(result, 1.0);
